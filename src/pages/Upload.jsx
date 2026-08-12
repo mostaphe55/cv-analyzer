@@ -2,7 +2,6 @@ import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Upload,
   FileText,
   X,
   CheckCircle,
@@ -22,6 +21,7 @@ import {
 } from "lucide-react";
 import * as pdfjsLib from "pdfjs-dist";
 import mammoth from "mammoth";
+import { readApiJsonResponse } from "../utils/apiResponse";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
@@ -30,18 +30,29 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 
 const GROQ_KEY = import.meta.env.VITE_GROQ_KEY;
 
+const getFileExtension = (file) =>
+  file?.name?.split(".").pop()?.toLowerCase() || "";
+
+const isDocxFile = (file) =>
+  file?.type ===
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+  getFileExtension(file) === "docx";
+
+const isPdfFile = (file) =>
+  file?.type === "application/pdf" || getFileExtension(file) === "pdf";
+
+const isTextFile = (file) =>
+  file?.type === "text/plain" || getFileExtension(file) === "txt";
+
 const extractText = async (file) => {
-  if (file.type === "text/plain") {
+  if (isTextFile(file)) {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = (e) => resolve(e.target.result);
       reader.readAsText(file);
     });
   }
-  if (
-    file.type ===
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-  ) {
+  if (isDocxFile(file)) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = async (e) => {
@@ -57,6 +68,10 @@ const extractText = async (file) => {
       reader.readAsArrayBuffer(file);
     });
   }
+  if (!isPdfFile(file)) {
+    throw new Error("Unsupported file type. Please upload PDF, TXT, or DOCX.");
+  }
+
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   let text = "";
@@ -68,22 +83,64 @@ const extractText = async (file) => {
   return text;
 };
 
+const getNumber = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.min(100, Math.max(0, number)) : 0;
+};
+
+const normalizeAnalysis = (analysis) => {
+  if (!analysis || typeof analysis !== "object") {
+    throw new Error("AI returned empty analysis. Please try again.");
+  }
+
+  const hasRealScore =
+    Number.isFinite(Number(analysis.overallScore)) ||
+    Number.isFinite(Number(analysis.atsScore));
+
+  if (!hasRealScore || !Array.isArray(analysis.jobMatches)) {
+    throw new Error("AI returned incomplete analysis. Please try again.");
+  }
+
+  const breakdown = analysis.breakdown || {};
+
+  return {
+    ...analysis,
+    overallScore: getNumber(analysis.overallScore),
+    atsScore: getNumber(analysis.atsScore),
+    breakdown: {
+      skills: getNumber(breakdown.skills),
+      experience: getNumber(breakdown.experience),
+      education: getNumber(breakdown.education),
+      formatting: getNumber(breakdown.formatting),
+    },
+    atsChecklist: Array.isArray(analysis.atsChecklist)
+      ? analysis.atsChecklist
+      : [],
+    suggestions: Array.isArray(analysis.suggestions)
+      ? analysis.suggestions
+      : [],
+    jobMatches: analysis.jobMatches,
+    missingSkills: Array.isArray(analysis.missingSkills)
+      ? analysis.missingSkills
+      : [],
+    radarData: Array.isArray(analysis.radarData) ? analysis.radarData : [],
+  };
+};
+
 const analyzeCV = async (cvText) => {
-  const response = await fetch(
-    "https://api.groq.com/openai/v1/chat/completions",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${GROQ_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        max_tokens: 2000,
-        messages: [
-          {
-            role: "system",
-            content: `You are an expert CV analyzer. Analyze the CV and return ONLY valid JSON with no markdown or explanation. Use this exact structure:
+  if (!GROQ_KEY) {
+    throw new Error(
+      "Missing Groq API key. Add VITE_GROQ_KEY to your .env file.",
+    );
+  }
+
+  const payload = {
+    model: "llama-3.3-70b-versatile",
+    max_tokens: 2000,
+    messages: [
+      {
+        role: "system",
+        content: `You are an expert CV analyzer. Analyze the CV and return ONLY valid JSON with no markdown or explanation. Use this exact structure:
 {
   "overallScore": 75,
   "breakdown": { "skills": 70, "experience": 80, "education": 85, "formatting": 65 },
@@ -117,23 +174,68 @@ const analyzeCV = async (cvText) => {
     {"subject": "Keywords", "A": 55},
     {"subject": "Summary", "A": 60}
   ]
-}`,
-          },
-          {
-            role: "user",
-            content: `Analyze this CV and return JSON only:\n\n${cvText.substring(0, 3000)}`,
-          },
-        ],
-      }),
+}
+
+Additional instructions:
+- Return only real Somali employer jobs, especially Hargeisa and Somaliland roles. Avoid generic African or remote listings.
+- Use Somali companies, banks, telecoms, NGOs, schools, universities, logistics firms, and government offices when possible.
+- Job titles should be CV-relevant local roles such as HR Officer, Recruitment Specialist, Administration Assistant, Finance Officer, Customer Service, Data Entry, IT Support, Sales Representative, Operations Coordinator, or Project Assistant.
+- Use actual Somali employers like Telesom, Somtel, Dahabshiil, Salaam Somali Bank, Premier Bank, National University of Hargeisa, Red Sea Housing, Hargeisa Polytechnic, Harawo Hotel, and local NGOs.
+- Make the location Hargeisa, Somaliland, or other Somali cities where relevant.
+- Do not manufacture companies from outside Somalia.`,
+      },
+      {
+        role: "user",
+        content: `Analyze this CV and return JSON only:\n\n${cvText.substring(0, 3000)}`,
+      },
+    ],
+  };
+
+  const requestOptions = {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${GROQ_KEY}`,
     },
+    body: JSON.stringify(payload),
+  };
+
+  let response = await fetch(
+    "/api/groq/openai/v1/chat/completions",
+    requestOptions,
   );
-  const data = await response.json();
-  const text = data.choices?.[0]?.message?.content || "{}";
+  let parsed = await readApiJsonResponse(
+    response,
+    "AI analysis request failed.",
+  );
+
+  if (!parsed.ok || !parsed.data?.choices?.[0]?.message?.content) {
+    response = await fetch(
+      "https://api.groq.com/openai/v1/chat/completions",
+      requestOptions,
+    );
+    parsed = await readApiJsonResponse(response, "AI analysis request failed.");
+  }
+
+  if (!parsed.ok) {
+    throw new Error(parsed.errorMessage || "AI analysis request failed.");
+  }
+
+  const data = parsed.data;
+  const text = data?.choices?.[0]?.message?.content;
+
+  if (!text) {
+    throw new Error("AI returned no analysis. Please try again.");
+  }
+
   const clean = text.replace(/```json|```/g, "").trim();
   try {
-    return JSON.parse(clean);
+    return normalizeAnalysis(JSON.parse(clean));
   } catch (e) {
-    throw new Error("AI returned invalid response. Please try again.");
+    throw new Error(
+      e.message || "AI returned invalid response. Please try again.",
+      { cause: e },
+    );
   }
 };
 
@@ -177,12 +279,7 @@ export default function UploadCV() {
   const handleFile = (f) => {
     setError("");
     if (!f) return;
-    const allowed = [
-      "application/pdf",
-      "text/plain",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ];
-    if (!allowed.includes(f.type)) {
+    if (!isPdfFile(f) && !isTextFile(f) && !isDocxFile(f)) {
       setError("Only PDF, TXT or Word (.docx) files are allowed!");
       return;
     }
@@ -206,9 +303,22 @@ export default function UploadCV() {
     try {
       setStatusIndex(0);
       const cvText = await extractText(file);
+
+      if (!cvText || cvText.trim().length < 50) {
+        throw new Error(
+          "I could not read enough text from this CV. Please try a clearer PDF, TXT, or DOCX file.",
+        );
+      }
+
       setStatusIndex(1);
       const analysis = await analyzeCV(cvText);
       setStatusIndex(2);
+
+      const previousAnalysis = localStorage.getItem("cvAnalysis");
+      if (previousAnalysis) {
+        localStorage.setItem("previousCvAnalysis", previousAnalysis);
+      }
+
       localStorage.setItem("cvAnalysis", JSON.stringify(analysis));
       localStorage.setItem("currentCV", file.name);
       const existing = JSON.parse(localStorage.getItem("cvHistory") || "[]");

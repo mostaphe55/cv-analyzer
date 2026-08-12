@@ -13,14 +13,55 @@ import {
   Award,
   MessageCircle,
   ChevronDown,
-  Mic,
   Copy,
   CheckCircle,
   RefreshCw,
   X,
 } from "lucide-react";
+import { readApiJsonResponse } from "../utils/apiResponse";
 
 const GROQ_KEY = import.meta.env.VITE_GROQ_KEY;
+
+const getTime = () =>
+  new Date().toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+const getSavedCvContext = () => {
+  const saved = localStorage.getItem("cvAnalysis");
+  const name = localStorage.getItem("currentCV");
+
+  if (!saved) {
+    return {
+      data: null,
+      name: "",
+      messages: [
+        {
+          role: "assistant",
+          time: getTime(),
+          text: "👋 Hello! I'm your AI Career Assistant.\n\nI notice you haven't uploaded a CV yet. Upload your CV first and I'll give you fully personalized advice based on your actual results! 🎯",
+        },
+      ],
+    };
+  }
+
+  const data = JSON.parse(saved);
+  const cvName = name || "Your CV";
+
+  return {
+    data,
+    name: cvName,
+    messages: [
+      {
+        role: "assistant",
+        time: getTime(),
+        text: `👋 Hello! I have fully analyzed your CV **${name || ""}**!\n\n📊 Overall Score: **${data.overallScore}/100**\n🎯 Best Match: **${data.jobMatches?.[0]?.title || "See Job Matches"}** at **${data.jobMatches?.[0]?.match || 0}%**\n⚡ ATS Score: **${data.atsScore}%**\n\nI know everything about your CV. Ask me anything and I will give you personalized advice! 🚀`,
+      },
+    ],
+  };
+};
+
 const quickSuggestions = [
   {
     icon: TrendingUp,
@@ -156,11 +197,12 @@ function MessageBubble({ msg, index }) {
 }
 
 export default function ChatAssistant() {
-  const [messages, setMessages] = useState([]);
+  const [savedContext] = useState(getSavedCvContext);
+  const [messages, setMessages] = useState(savedContext.messages);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [cvData, setCvData] = useState(null);
-  const [cvName, setCvName] = useState("");
+  const [cvData] = useState(savedContext.data);
+  const [cvName] = useState(savedContext.name);
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [charCount, setCharCount] = useState(0);
@@ -168,37 +210,6 @@ export default function ChatAssistant() {
   const chatRef = useRef();
   const inputRef = useRef();
   const navigate = useNavigate();
-
-  const getTime = () =>
-    new Date().toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-  useEffect(() => {
-    const saved = localStorage.getItem("cvAnalysis");
-    const name = localStorage.getItem("currentCV");
-    if (saved) {
-      const data = JSON.parse(saved);
-      setCvData(data);
-      setCvName(name || "Your CV");
-      setMessages([
-        {
-          role: "assistant",
-          time: getTime(),
-          text: `👋 Hello! I have fully analyzed your CV **${name || ""}**!\n\n📊 Overall Score: **${data.overallScore}/100**\n🎯 Best Match: **${data.jobMatches?.[0]?.title || "See Job Matches"}** at **${data.jobMatches?.[0]?.match || 0}%**\n⚡ ATS Score: **${data.atsScore}%**\n\nI know everything about your CV. Ask me anything and I will give you personalized advice! 🚀`,
-        },
-      ]);
-    } else {
-      setMessages([
-        {
-          role: "assistant",
-          time: getTime(),
-          text: "👋 Hello! I'm your AI Career Assistant.\n\nI notice you haven't uploaded a CV yet. Upload your CV first and I'll give you fully personalized advice based on your actual results! 🎯",
-        },
-      ]);
-    }
-  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -254,29 +265,36 @@ Format responses clearly with emojis and bullet points when helpful.`;
     setCharCount(0);
     setLoading(true);
     try {
-      const response = await fetch(
-        "https://api.groq.com/openai/v1/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${GROQ_KEY}`,
-          },
-          body: JSON.stringify({
-            model: "llama-3.3-70b-versatile",
-            max_tokens: 1000,
-            messages: [
-              { role: "system", content: buildSystemPrompt() },
-              ...messages.map((m) => ({ role: m.role, content: m.text })),
-              { role: "user", content: userText },
-            ],
-          }),
+      const payload = {
+        model: "llama-3.3-70b-versatile",
+        max_tokens: 1000,
+        messages: [
+          { role: "system", content: buildSystemPrompt() },
+          ...messages.map((m) => ({ role: m.role, content: m.text })),
+          { role: "user", content: userText },
+        ],
+      };
+      const requestOptions = {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${GROQ_KEY}`,
         },
-      );
-      const data = await response.json();
+        body: JSON.stringify(payload),
+      };
+
+      let response = await fetch("/api/groq/openai/v1/chat/completions", requestOptions);
+      let parsed = await readApiJsonResponse(response, "Chat request failed.");
+
+      if (!parsed.ok || !parsed.data?.choices?.[0]?.message?.content) {
+        response = await fetch("https://api.groq.com/openai/v1/chat/completions", requestOptions);
+        parsed = await readApiJsonResponse(response, "Chat request failed.");
+      }
+
       const reply =
-        data.choices?.[0]?.message?.content ||
-        "Sorry, I could not get a response.";
+        parsed.ok && parsed.data?.choices?.[0]?.message?.content
+          ? parsed.data.choices[0].message.content
+          : "Sorry, I could not get a response.";
       setMessages((prev) => [
         ...prev,
         { role: "assistant", text: reply, time: getTime() },

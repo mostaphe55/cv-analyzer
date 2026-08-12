@@ -110,10 +110,10 @@ export default function Home() {
 
         {/* Heading */}
         <h1 className="text-4xl md:text-6xl font-bold text-white mb-6 leading-tight">
-          Take Your Career To
+          Gali CV oo hel qiimayn
           <br />
           <span className="text-transparent bg-clip-text bg-linear-to-r from-blue-400 via-cyan-400 to-blue-600">
-            The Next Level
+            iyo shaqooyin ku munaasiba
           </span>
         </h1>
 
@@ -130,7 +130,7 @@ export default function Home() {
             className="flex items-center gap-3 bg-linear-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold px-10 py-4 rounded-2xl transition-all duration-200 shadow-lg shadow-blue-600/30 hover:shadow-blue-600/50 hover:scale-105 text-base"
           >
             <Upload size={20} />
-            Upload Your CV Now
+            Let's Get Started
             <ArrowRight size={18} />
           </button>
           <button
@@ -138,7 +138,7 @@ export default function Home() {
             className="flex items-center gap-3 bg-gray-800/80 hover:bg-gray-700 text-white font-semibold px-10 py-4 rounded-2xl transition-all duration-200 border border-gray-700 hover:border-gray-500 text-base"
           >
             <BarChart2 size={20} />
-            View Demo Dashboard
+            Explore Demo Dashboard
           </button>
         </div>
 

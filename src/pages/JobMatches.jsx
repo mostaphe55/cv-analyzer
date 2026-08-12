@@ -1,16 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import { generateJobLink } from "../utils/jobMatcher";
+import AIJobSearchModal from "../components/AIJobSearchModal";
+
 import {
   Briefcase,
   MapPin,
   Clock,
   DollarSign,
   Star,
-  TrendingUp,
   CheckCircle,
   XCircle,
-  Target,
   Award,
   Zap,
   ArrowRight,
@@ -20,7 +21,6 @@ import {
   Globe,
   Sparkles,
   Filter,
-  ChevronDown,
   Trophy,
   Medal,
 } from "lucide-react";
@@ -66,20 +66,17 @@ const jobColors = [
 
 const matchColor = (s) =>
   s >= 80 ? "text-green-400" : s >= 65 ? "text-yellow-400" : "text-red-400";
-const matchBg = (s) =>
-  s >= 80 ? "bg-green-500" : s >= 65 ? "bg-yellow-500" : "bg-red-500";
+
 const matchGrad = (s) =>
   s >= 80
     ? "from-green-600 to-emerald-400"
     : s >= 65
       ? "from-yellow-600 to-amber-400"
       : "from-red-600 to-rose-400";
+
 const matchLabel = (s) =>
-  s >= 80
-    ? "🔥 Excellent Match"
-    : s >= 65
-      ? "👍 Good Match"
-      : "⚡ Partial Match";
+  s >= 80 ? "Excellent Match" : s >= 65 ? "👍 Good Match" : "⚡ Partial Match";
+
 const matchRank = (i) =>
   i === 0
     ? { icon: Trophy, color: "text-yellow-400", label: "Best Match" }
@@ -91,21 +88,34 @@ const matchRank = (i) =>
 
 const containerVariants = {
   hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.1 } },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+    },
+  },
 };
 
 const cardVariants = {
-  hidden: { opacity: 0, y: 30, scale: 0.95 },
+  hidden: {
+    opacity: 0,
+    y: 30,
+    scale: 0.95,
+  },
   show: {
     opacity: 1,
     y: 0,
     scale: 1,
-    transition: { type: "spring", stiffness: 90, damping: 15 },
+    transition: {
+      type: "spring",
+      stiffness: 90,
+      damping: 15,
+    },
   },
 };
 
 // Job Detail Modal
-function JobDetailModal({ job, index, onClose }) {
+function JobDetailModal({ job, index, onClose, onSearch }) {
   if (!job) return null;
   const color = jobColors[index % jobColors.length];
   const rank = matchRank(index);
@@ -223,7 +233,7 @@ function JobDetailModal({ job, index, onClose }) {
                 {
                   icon: Star,
                   label: "Source",
-                  value: "AI Matched",
+                  value: job.source,
                   color: "text-yellow-400",
                   bg: "from-yellow-900/30 to-yellow-800/10",
                 },
@@ -240,7 +250,6 @@ function JobDetailModal({ job, index, onClose }) {
                 </motion.div>
               ))}
             </div>
-
             {/* Skills You Have */}
             {job.skills?.length > 0 && (
               <div>
@@ -263,7 +272,6 @@ function JobDetailModal({ job, index, onClose }) {
                 </div>
               </div>
             )}
-
             {/* Skills You Need */}
             {job.missing?.length > 0 && (
               <div>
@@ -286,11 +294,11 @@ function JobDetailModal({ job, index, onClose }) {
                 </div>
               </div>
             )}
-
             {/* Apply Button */}
             <motion.button
               whileHover={{ scale: 1.03, y: -2 }}
               whileTap={{ scale: 0.97 }}
+              onClick={() => onSearch(job)}
               className={`w-full py-4 rounded-2xl text-white font-black text-base bg-linear-to-r ${color.grad} shadow-xl flex items-center justify-center gap-3 relative overflow-hidden`}
             >
               <motion.div
@@ -304,7 +312,7 @@ function JobDetailModal({ job, index, onClose }) {
                 className="absolute inset-0 bg-linear-to-r from-transparent via-white/20 to-transparent skew-x-12"
               />
               <ExternalLink size={18} />
-              Apply For This Job
+              Open Official Job
               <ArrowRight size={16} />
             </motion.button>
           </div>
@@ -315,23 +323,30 @@ function JobDetailModal({ job, index, onClose }) {
 }
 
 export default function JobMatches() {
-  const [jobs, setJobs] = useState([]);
+  const [jobs] = useState(() => {
+    const saved = localStorage.getItem("cvAnalysis");
+
+    if (!saved) return [];
+
+    const data = JSON.parse(saved);
+
+    return (data.jobMatches || []).map((job) => ({
+      ...job,
+      ...generateJobLink(job),
+    }));
+  });
   const [selectedJob, setSelectedJob] = useState(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [filter, setFilter] = useState("all");
   const [sortBy, setSortBy] = useState("match");
+  const [searchingJob, setSearchingJob] = useState(null);
+
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const saved = localStorage.getItem("cvAnalysis");
-    if (saved) {
-      const data = JSON.parse(saved);
-      setJobs(data.jobMatches || []);
-    }
-  }, []);
-
   const best = jobs.length > 0 ? Math.max(...jobs.map((j) => j.match)) : 0;
+
   const excellent = jobs.filter((j) => j.match >= 80).length;
+
   const good = jobs.filter((j) => j.match >= 65 && j.match < 80).length;
 
   const filtered = jobs
@@ -345,15 +360,40 @@ export default function JobMatches() {
       sortBy === "match" ? b.match - a.match : a.title?.localeCompare(b.title),
     );
 
+  const startOfficialJobSearch = (job) => {
+    if (!job) return;
+
+    let openedWindow = null;
+
+    if (job.applyUrl || job.website) {
+      openedWindow = window.open("about:blank", "_blank");
+
+      if (openedWindow) {
+        openedWindow.opener = null;
+        openedWindow.document.write(
+          '<!doctype html><title>Opening job...</title><body style="font-family:system-ui;padding:24px;background:#111827;color:white">Opening official job page...</body>',
+        );
+        openedWindow.document.close();
+      }
+    }
+
+    setSearchingJob({ ...job, openedWindow });
+  };
+
   return (
     <div className="max-w-5xl mx-auto pb-10">
-      {/* Job Detail Modal */}
+      <AIJobSearchModal
+        job={searchingJob}
+        onFinish={() => setSearchingJob(null)}
+      />
+
       <AnimatePresence>
         {selectedJob && (
           <JobDetailModal
             job={selectedJob}
             index={selectedIndex}
             onClose={() => setSelectedJob(null)}
+            onSearch={startOfficialJobSearch}
           />
         )}
       </AnimatePresence>
@@ -363,32 +403,7 @@ export default function JobMatches() {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex items-start justify-between mb-8 flex-wrap gap-4"
-      >
-        <div className="flex items-center gap-4">
-          <motion.div
-            animate={{ rotate: [0, 360] }}
-            transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-            className="w-12 h-12 rounded-2xl bg-linear-to-br from-blue-600/20 to-cyan-600/20 border border-blue-500/20 flex items-center justify-center"
-          >
-            <Target size={22} className="text-blue-400" />
-          </motion.div>
-          <div>
-            <h1 className="text-3xl font-bold text-white">Job Matches</h1>
-            <p className="text-gray-400 text-sm">
-              AI matched you with these roles based on your real CV
-            </p>
-          </div>
-        </div>
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => navigate("/upload")}
-          className="flex items-center gap-2 bg-gray-800 border border-gray-700 hover:border-blue-500/50 text-gray-400 hover:text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all"
-        >
-          <Zap size={14} /> Re-analyze CV
-        </motion.button>
-      </motion.div>
-
+      ></motion.div>
       {jobs.length === 0 ? (
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
@@ -402,12 +417,15 @@ export default function JobMatches() {
           >
             <Briefcase size={36} className="text-yellow-400" />
           </motion.div>
+
           <h2 className="text-white text-2xl font-bold mb-3">
             No Job Matches Yet!
           </h2>
+
           <p className="text-gray-500 mb-8">
             Upload your CV to get AI-powered job recommendations
           </p>
+
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -703,7 +721,7 @@ export default function JobMatches() {
                           { icon: MapPin, text: location || "Remote" },
                           { icon: Clock, text: type || "Full Time" },
                           { icon: DollarSign, text: salary || "Competitive" },
-                          { icon: Globe, text: "AI Matched" },
+                          { icon: Globe, text: job.source },
                         ].map(({ icon: Icon, text }) => (
                           <div
                             key={text}
@@ -769,14 +787,12 @@ export default function JobMatches() {
                         </div>
                       )}
 
-                      {/* Apply Button */}
                       <motion.button
                         whileHover={{ scale: 1.03 }}
                         whileTap={{ scale: 0.97 }}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedJob(job);
-                          setSelectedIndex(originalIndex);
+                          startOfficialJobSearch(job);
                         }}
                         className={`w-full py-3 rounded-2xl text-sm font-bold text-white bg-linear-to-r ${color.grad} flex items-center justify-center gap-2 relative overflow-hidden shadow-lg`}
                       >
@@ -791,7 +807,7 @@ export default function JobMatches() {
                           className="absolute inset-0 bg-linear-to-r from-transparent via-white/20 to-transparent skew-x-12"
                         />
                         <ExternalLink size={14} />
-                        View & Apply
+                        Open Official Job
                         <ArrowRight
                           size={14}
                           className="opacity-0 group-hover:opacity-100 transition-all"
@@ -819,7 +835,7 @@ export default function JobMatches() {
               <Sparkles size={24} className="text-white" />
             </motion.div>
             <h3 className="text-white font-bold text-xl mb-2">
-              Want Better Job Matches? 🚀
+              Want Better Job Matches?
             </h3>
             <p className="text-gray-400 text-sm mb-6 max-w-md mx-auto">
               Improve your CV based on the suggestions to unlock higher match

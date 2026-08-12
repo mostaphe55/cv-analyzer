@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   BarChart2,
   CheckCircle,
@@ -30,8 +30,6 @@ import {
   YAxis,
   Tooltip,
   Cell,
-  LineChart,
-  Line,
   CartesianGrid,
 } from "recharts";
 
@@ -58,6 +56,21 @@ const slideLeft = {
 const slideRight = {
   hidden: { opacity: 0, x: 40 },
   show: { opacity: 1, x: 0, transition: { type: "spring", stiffness: 80 } },
+};
+
+const parseSavedAnalysis = (value) => {
+  if (!value) return null;
+
+  try {
+    const parsed = JSON.parse(value);
+    const hasScore =
+      Number.isFinite(Number(parsed?.overallScore)) ||
+      Number.isFinite(Number(parsed?.atsScore));
+
+    return hasScore && Array.isArray(parsed?.jobMatches) ? parsed : null;
+  } catch {
+    return null;
+  }
 };
 
 // Animated Score Circle
@@ -194,17 +207,14 @@ function CustomTooltip({ active, payload, label }) {
 }
 
 export default function Dashboard() {
-  const [data, setData] = useState(null);
-  const [cvName, setCvName] = useState("");
+  const [data] = useState(
+    () =>
+      parseSavedAnalysis(localStorage.getItem("cvAnalysis")) ||
+      parseSavedAnalysis(localStorage.getItem("previousCvAnalysis")),
+  );
+  const [cvName] = useState(() => localStorage.getItem("currentCV") || "");
   const [activeBar, setActiveBar] = useState(null);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const saved = localStorage.getItem("cvAnalysis");
-    const name = localStorage.getItem("currentCV");
-    if (saved) setData(JSON.parse(saved));
-    if (name) setCvName(name);
-  }, []);
 
   if (!data)
     return (

@@ -41,37 +41,6 @@ An intelligent web application that analyzes CVs and resumes using Artificial In
 
 ---
 
-## ✨ Features
-
-| Feature              | Description                                            |
-| -------------------- | ------------------------------------------------------ |
-| 📤 CV Upload         | Upload PDF, DOCX, or TXT resume files                  |
-| 🤖 AI Analysis       | Real AI reads and analyzes every section of the CV     |
-| 📊 CV Scoring        | Get a quality score out of 100 with detailed breakdown |
-| ✅ ATS Checker       | Check if CV passes Applicant Tracking Systems          |
-| 💡 AI Suggestions    | Get smart improvement tips with priority levels        |
-| 🎯 Job Matching      | Match with suitable jobs based on your real CV         |
-| 💬 AI Chat Assistant | Chat with AI about your CV and career in real time     |
-| 📁 History Tracking  | Track all your CV analyses over time                   |
-
----
-
-## 🧠 AI Implementation
-
-This project uses **real Artificial Intelligence**:
-
-- **AI Model:** LLaMA 3.3 70B (via Groq API)
-- **PDF Parsing:** PDF.js library for text extraction
-- **Word Parsing:** Mammoth.js for DOCX files
-- **AI Tasks:**
-  - CV text analysis and scoring
-  - Job role matching with percentage scores
-  - Personalized improvement suggestions
-  - ATS compatibility checking
-  - Real-time career advice chatbot
-
----
-
 ## 🛠️ Technologies Used
 
 | Technology           | Purpose                    |

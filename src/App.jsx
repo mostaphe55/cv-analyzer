@@ -13,7 +13,7 @@ import Suggestions from "./pages/Suggestions";
 import JobMatches from "./pages/JobMatches";
 import ChatAssistant from "./pages/ChatAssistant";
 import History from "./pages/History";
-import Sidebar from "./Components/Sidebar";
+import Navbar from "./components/Navbar";
 
 const pageVariants = {
   initial: { opacity: 0, y: 16 },
@@ -101,18 +101,29 @@ function PageWrapper({ children }) {
   );
 }
 
+function AppLayout() {
+  const location = useLocation();
+  const isLandingPage = location.pathname === "/";
+
+  return (
+    <div className="flex min-h-screen flex-col bg-gray-950 text-white overflow-hidden">
+      {!isLandingPage && <Navbar />}
+      <div className="flex flex-col flex-1 overflow-hidden">
+        {!isLandingPage && <Header />}
+        <main
+          className={`flex-1 overflow-y-auto p-6 ${isLandingPage ? "py-8" : ""}`}
+        >
+          <AnimatedRoutes />
+        </main>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   return (
     <Router>
-      <div className="flex h-screen bg-gray-950 text-white overflow-hidden">
-        <Sidebar />
-        <div className="flex flex-col flex-1 overflow-hidden">
-          <Header />
-          <main className="flex-1 overflow-y-auto p-6">
-            <AnimatedRoutes />
-          </main>
-        </div>
-      </div>
+      <AppLayout />
     </Router>
   );
 }
