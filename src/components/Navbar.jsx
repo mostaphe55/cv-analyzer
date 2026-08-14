@@ -244,10 +244,7 @@ export default function Navbar() {
                             Sign up
                           </button>
                         </div>
-                        <p className="text-xs text-slate-500">
-                          Your Google Client ID must be set as
-                          VITE_GOOGLE_CLIENT_ID in your environment.
-                        </p>
+                        <p className="text-xs text-slate-500">Sign in with Google or email to personalize your experience.</p>
                       </div>
                     ) : (
                       <div className="flex flex-col gap-3">
