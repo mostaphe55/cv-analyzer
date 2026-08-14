@@ -45,29 +45,19 @@ export default function SignInForm({ onSignIn }) {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(12px)" }}
+    <motion.div
+      initial={{ opacity: 0, scale: 0.9, y: 20 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={{ type: "spring", stiffness: 120, damping: 20 }}
+      className="relative w-full max-w-md mx-auto"
+      style={{
+        background: "rgba(17,24,39,0.95)",
+        border: "0.5px solid rgba(255,255,255,0.1)",
+        borderRadius: "24px",
+        padding: "2.5rem",
+        overflow: "hidden",
+      }}
     >
-      {/* Background glows */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-cyan-600/10 rounded-full blur-3xl" />
-      </div>
-
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ type: "spring", stiffness: 120, damping: 20 }}
-        className="relative w-full max-w-md"
-        style={{
-          background: "rgba(17,24,39,0.95)",
-          border: "0.5px solid rgba(255,255,255,0.1)",
-          borderRadius: "24px",
-          padding: "2.5rem",
-          overflow: "hidden",
-        }}
-      >
         {/* Top shimmer line */}
         <div className="absolute top-0 left-0 right-0 h-px bg-linear-to-r from-transparent via-blue-400/60 to-transparent" />
 
@@ -324,6 +314,5 @@ export default function SignInForm({ onSignIn }) {
           )}
         </AnimatePresence>
       </motion.div>
-    </div>
   );
 }
